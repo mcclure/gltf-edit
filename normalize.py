@@ -18,22 +18,43 @@ def componentTypeString(componentType): # Get name of enum
 
 def ratioWithDeadzone(value, compare, deadzone): # Returns a ratio that turns value into compare-- UNLESS the values have less than "deadzone" difference, then returns false. 
     diff = abs(compare - value)
-    if diff < deadzone:
+    if diff == 0 or diff < deadzone:
         return False
     return compare/value
+
+def reweight(inVec, ratio, target, doOverkill, doRound):
+    outVec = [x * ratio for x in inVec]
+    if doRound:
+        outVec = [round(x) for x in inVec]
+    # Last ditch method to make COMPLETELY CERTAIN the values add to 1:
+    # Set the greatest value in the vector to the difference between the other three weights and the target value
+    if doOverkill:
+        maxI = 0
+        maxV = outVec[0]
+        for i,v in enumerate(outVec,1):
+            if v > maxV:
+                maxI = i
+                maxV = v
+        sumV = 0
+        for i,v in enumerate(outVec):
+            if i != maxI:
+                sumV += v
+        outVec[maxI] = target - sumV
+    return outVec
 
 @click.command(help="Normalizes weight attributes of a GLTF file")
 @click.argument('infile')
 @click.argument('outfile')
-@click.option('--attr', default=["WEIGHTS_0"], multiple=True, help="Attribute to normalize. Can be passed multiple times. If no --attr argument is included, defaults to WEIGHTS_0 only")
-@click.option('--zero-replacement', default=[1.0, 0.0, 0.0, 0.0], nargs=4, type=click.FLOAT, help="Four decimal numbers separated by spaces, representing the replacement vec4 that all-zero weights will be replaced with.              Default is 1 0 0 0")
+@click.option('--attr', default=["WEIGHTS_0"], multiple=True, help="Attribute to normalize. Can be passed multiple times. If no --attr argument is included, defaults to WEIGHTS_0 only\n")
+@click.option('--zero-replacement', default=[1.0, 0.0, 0.0, 0.0], nargs=4, type=click.FLOAT, help="Four decimal numbers separated by spaces, representing the replacement vec4 that all-zero weights will be replaced with.              Default is 1 0 0 0\n")
 @click.option('--no-reweight', count=True, help="Do not normalize nonzero weights (will still perform replacement on all-zero weights)")
+@click.option('--no-reweight-overkill', count=True, help="Normally the reweight does a last-ditch pass where any remaining difference after normalizing is distributed into the greatest component. This flag disables that.")
 @click.option('--float-good-enough', default=1/1024, type=click.FLOAT, help="If error on a vertex is less than this, reweighting will be skipped. Applies to weights stored as floats only. Default 1/1024. Set to 0 for \"reweight unless perfect\"")
 @click.option('--short-good-enough', default=4, type=click.INT, help="If error on a vertex is less than this, reweighting will be skipped. Applies to weights stored as unsigned shorts only. Default 4. Set to 0 for \"reweight unless perfect\"")
 @click.option('--byte-good-enough', default=4, type=click.INT, help="If error on a vertex is less than this, reweighting will be skipped. Applies to weights stored as unsigned bytes only. Default 4. Set to 0 for \"reweight unless perfect\"")
 @click.option('--dry-run', count=True, help="Do not save OUTFILE (will still print information about INFILE)")
 @click.option('--verbose', '-v', count=True, help="Explain what the script is doing in STDOUT")
-def normalize(infile, outfile, attr, zero_replacement, no_reweight, float_good_enough, short_good_enough, byte_good_enough, dry_run, verbose):
+def normalize(infile, outfile, attr, zero_replacement, no_reweight, no_reweight_overkill, float_good_enough, short_good_enough, byte_good_enough, dry_run, verbose):
     gltf = GLTF2().load(infile)
 
     attrAccessor = []                   # Track all found accessors for requested attributes
@@ -126,17 +147,19 @@ def normalize(infile, outfile, attr, zero_replacement, no_reweight, float_good_e
                 if not replaceVec and not no_reweight:
                     ratio = ratioWithDeadzone(readSum, 1.0, float_good_enough)
                     if ratio:
-                        replaceVec = [x*ratio for x in readVec]
+                        replaceVec = reweight(readVec, ratio, 1.0, not no_reweight_overkill, False)
 
             elif componentType == ComponentType.UNSIGNED_BYTE:
-                ratio = ratioWithDeadzone(readSum, 1.0, byte_good_enough)
-                if ratio:
-                    pass
+                if not replaceVec and not no_reweight:
+                    ratio = ratioWithDeadzone(readSum, 255, byte_good_enough)
+                    if ratio:
+                        replaceVec = reweight(readVec, ratio, 255, not no_reweight_overkill, True)
 
             elif componentType == ComponentType.UNSIGNED_SHORT:
-                ratio = ratioWithDeadzone(readSum, 1.0, short_good_enough)
-                if ratio:
-                    pass
+                if not replaceVec and not no_reweight:
+                    ratio = ratioWithDeadzone(readSum, 65535, short_good_enough)
+                    if ratio:
+                        replaceVec = reweight(readVec, ratio, 65535, not no_reweight_overkill, True)
 
             if replaceVec:
                 pack_into(componentFormat, blob, byteOffset, *replaceVec)
