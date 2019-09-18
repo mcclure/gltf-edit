@@ -22,7 +22,7 @@ def ratioWithDeadzone(value, compare, deadzone): # Returns a ratio that turns va
         return False
     return compare/value
 
-def reweight(inVec, ratio, target, doOverkill, doRound):
+def reweight(inVec, ratio, target, doOverkill, doRound): # Multiplies inVec by ratio, with some options
     outVec = [x * ratio for x in inVec]
     if doRound:
         outVec = [round(x) for x in inVec]
@@ -46,7 +46,7 @@ def reweight(inVec, ratio, target, doOverkill, doRound):
 @click.argument('infile')
 @click.argument('outfile')
 @click.option('--attr', default=["WEIGHTS_0"], multiple=True, help="Attribute to normalize. Can be passed multiple times. If no --attr argument is included, defaults to WEIGHTS_0 only\n")
-@click.option('--zero-replacement', default=[1.0, 0.0, 0.0, 0.0], nargs=4, type=click.FLOAT, help="Four decimal numbers separated by spaces, representing the replacement vec4 that all-zero weights will be replaced with.              Default is 1 0 0 0\n")
+@click.option('--zero-replacement', default=[1.0, 0.0, 0.0, 0.0], nargs=4, type=click.FLOAT, help="Four decimal numbers 0-1 separated by spaces, representing the replacement vec4 that all-zero weights will be replaced with.            Default is 1 0 0 0\n")
 @click.option('--no-reweight', count=True, help="Do not normalize nonzero weights (will still perform replacement on all-zero weights)")
 @click.option('--no-reweight-overkill', count=True, help="Normally the reweight does a last-ditch pass where any remaining difference after normalizing is distributed into the greatest component. This flag disables that.")
 @click.option('--float-good-enough', default=1/1024, type=click.FLOAT, help="If error on a vertex is less than this, reweighting will be skipped. Applies to weights stored as floats only. Default 1/1024. Set to 0 for \"reweight unless perfect\"")
@@ -126,12 +126,15 @@ def normalize(infile, outfile, attr, zero_replacement, no_reweight, no_reweight_
         if componentType == ComponentType.FLOAT:
             componentFormat = "<ffff"
             byteStride = byteStride or 16
+            currentZeroReplacement = zero_replacement
         elif componentType == ComponentType.UNSIGNED_BYTE:
             componentFormat = "<BBBB"
             byteStride = byteStride or 4
+            currentZeroReplacement = reweight(zero_replacement, 255, 255, not no_reweight_overkill, True)
         elif componentType == ComponentType.UNSIGNED_SHORT:
             componentFormat = "<HHHH"
             byteStride = byteStride or 8
+            currentZeroReplacement = reweight(zero_replacement, 65535, 65535, not no_reweight_overkill, True)
         else:
             print("Warning: File is corrupt: Accessor {} has component type {}. This is not a recognized type. Skipping accessor...".format(accessorI, componentType), file=sys.stderr)
             continue
@@ -140,7 +143,7 @@ def normalize(infile, outfile, attr, zero_replacement, no_reweight, no_reweight_
         while byteOffset < byteGoal:
             readVec = unpack_from(componentFormat, blob, byteOffset)
             readSum = sum(readVec)
-            replaceVec = zero_replacement if readSum == 0 else None
+            replaceVec = currentZeroReplacement if readSum == 0 else None
             ratio = None
 
             if componentType == ComponentType.FLOAT:

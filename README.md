@@ -36,7 +36,7 @@ The script has many options. You can see them with `python3 normalize.py --help`
 
 # Known issues
 
-This script currently cannot handle GLTF files that have multiple independent buffers. Also, in my testing, the sizes of the output files are slightly different from the input files, even if the script did not change anything. I *think* this is only because pygltflib makes different decisions about padding and no actual content has been altered, but I don't know for a fact. I have not fully tested the reweighting feature.
+This script currently cannot handle GLTF files that have multiple independent buffers. Also, in my testing, the sizes of the output files are slightly different from the input files, even if the script did not change anything. I *think* this is only because pygltflib makes different decisions about padding and no actual content has been altered, but I don't know for a fact. I have not tested the reweighting feature with a file that binary-packs its weights as UNSIGNED_BYTE or UNSIGNED_SHORT.
 
 # License
 
