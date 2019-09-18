@@ -58,7 +58,8 @@ def normalize(infile, outfile, attr, zero_replacement, no_reweight, float_good_e
             print("Warning: No mesh in this file has an attribute", a, file=sys.stderr)
     
     gltf.convert_buffers(BufferFormat.BINARYBLOB) # In principle it would be possible to leave URIs as is
-    gltf._glb_data = bytearray(gltf._glb_data) # This technically violates the api but we're not given another way to mutate
+    blob = bytearray(gltf._glb_data) # This technically violates the api but we're not given another way to mutate
+    gltf._glb_data = blob
 
     for accessorI in attrAccessor:
         try: # Extract accessor object
@@ -115,7 +116,6 @@ def normalize(infile, outfile, attr, zero_replacement, no_reweight, float_good_e
             continue
 
         # Alter data
-        blob = gltf.binary_blob()
         while byteOffset < byteGoal:
             readVec = unpack_from(componentFormat, blob, byteOffset)
             readSum = sum(readVec)
@@ -128,13 +128,11 @@ def normalize(infile, outfile, attr, zero_replacement, no_reweight, float_good_e
                     if ratio:
                         replaceVec = [x*ratio for x in readVec]
 
-                byteOffset += (byteStride or 16)
             elif componentType == ComponentType.UNSIGNED_BYTE:
                 ratio = ratioWithDeadzone(readSum, 1.0, byte_good_enough)
                 if ratio:
                     pass
 
-                byteOffset += (byteStride or 4)
             elif componentType == ComponentType.UNSIGNED_SHORT:
                 ratio = ratioWithDeadzone(readSum, 1.0, short_good_enough)
                 if ratio:
