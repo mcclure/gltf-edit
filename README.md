@@ -18,7 +18,7 @@ I suggest using a virtualenv for this script. Before first running the script, r
 
 	python3 -m venv env
 	source env/bin/activate
-	pip install -r requirements.txt
+	pip3 install -r requirements.txt
 
 ## Normal usage
 
